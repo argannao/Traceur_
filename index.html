@@ -134,6 +134,18 @@ td.act button:hover{background:var(--ink);color:var(--paper)}
 #dOut{width:100%;background:var(--paper)}
 #sname{width:100%;text-transform:none}
 
+/* ---- menu Fichier ---- */
+.menu{position:relative}
+.menu-list{position:absolute;right:0;top:calc(100% + 6px);min-width:280px;background:var(--panel);border:1px solid var(--ink);box-shadow:6px 6px 0 var(--ink);z-index:30;display:flex;flex-direction:column;padding:4px 0}
+.menu-list button{display:flex;justify-content:space-between;align-items:center;gap:18px;background:none;border:0;padding:9px 14px;text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.menu-list button:hover,.menu-list button:focus-visible{background:var(--ink);color:var(--paper);outline:none}
+.menu-list kbd{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0;text-transform:none}
+.menu-list button:hover kbd{color:var(--lime)}
+.menu-list hr{border:0;border-top:1px solid var(--rule);margin:4px 0}
+.status .file b{font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.status .file.is-dirty::before{background:var(--violet)}
+.status .file .dirty{color:var(--violet)}
+
 /* ---- image de référence ---- */
 .refpanel{border-top:1px solid var(--rule);padding-top:12px;display:flex;flex-direction:column;gap:10px}
 .refhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:500;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
@@ -180,8 +192,21 @@ textarea{width:100%;min-height:260px;resize:vertical;background:var(--paper);bor
   <nav class="crumbs" aria-label="Fil d'Ariane">GRIMOIRE <span>/</span> OUTILS <span>/</span> FORMES <span>/</span> SVG</nav>
   <div class="sys"><span>SYS.TIME</span><b id="clock">--:--:--</b><span>ZONE</span><b id="sysZone">—</b></div>
   <div class="actions">
+    <div class="menu" id="fileMenu">
+      <button class="btn" id="fileBtn" aria-haspopup="true" aria-expanded="false">Fichier ▾</button>
+      <div class="menu-list" id="fileList" role="menu" hidden>
+        <button role="menuitem" id="mNew">Nouveau<kbd>Ctrl+Alt+N</kbd></button>
+        <button role="menuitem" id="mOpen">Ouvrir…<kbd>Ctrl+O</kbd></button>
+        <hr>
+        <button role="menuitem" id="mSave">Enregistrer<kbd>Ctrl+S</kbd></button>
+        <button role="menuitem" id="mSaveAs">Enregistrer sous…<kbd>Ctrl+Maj+S</kbd></button>
+        <hr>
+        <button role="menuitem" id="openImport">Importer SVG (coller)</button>
+        <button role="menuitem" id="mSvg">Enregistrer en .svg…</button>
+      </div>
+    </div>
+    <input type="file" id="openFile" accept=".traceur,.json,.svg,application/json,image/svg+xml" hidden>
     <button class="btn" id="undo">Annuler</button>
-    <button class="btn" id="openImport">Importer SVG</button>
     <button class="btn primary" id="openExport">Exporter</button>
   </div>
 </header>
@@ -271,6 +296,7 @@ textarea{width:100%;min-height:260px;resize:vertical;background:var(--paper);bor
     <div class="row" style="margin:16px 0 10px">
       <div class="seg" id="exMode"><button data-m="full" class="on">Fichier SVG complet</button><button data-m="inner">Formes seules</button></div>
       <button class="btn primary" id="copy">Copier</button>
+      <button class="btn" id="saveSvgBtn">Enregistrer .svg</button>
     </div>
     <p class="hint" id="exHint" style="margin-bottom:10px"></p>
     <textarea id="exOut" readonly spellcheck="false"></textarea>
@@ -289,8 +315,35 @@ textarea{width:100%;min-height:260px;resize:vertical;background:var(--paper);bor
   </div>
 </div>
 
+<div class="sheet" id="saveSheet" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="svT">
+    <div class="row"><h2 id="svT">Enregistrer_sous</h2><button class="btn small" data-close>Fermer ✕</button></div>
+    <p class="hint" style="margin:14px 0 10px" id="svHint"></p>
+    <form id="saveForm" class="row" style="flex-wrap:nowrap">
+      <input type="text" id="saveName" spellcheck="false" autocomplete="off" style="flex:1" aria-label="Nom du fichier">
+      <span id="saveExt" style="font-size:12.5px">.traceur</span>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </form>
+    <p class="err" id="svErr"></p>
+    <div class="hatch"></div>
+  </div>
+</div>
+
+<div class="sheet" id="askSheet" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="askT">
+    <div class="row"><h2 id="askT">Modifications_non_enregistrées</h2></div>
+    <p class="hint" style="margin:14px 0" id="askMsg"></p>
+    <div class="row">
+      <button class="btn primary" id="askSave">Enregistrer d'abord</button>
+      <button class="btn danger" id="askDiscard">Continuer sans enregistrer</button>
+      <button class="btn" id="askCancel">Annuler</button>
+    </div>
+    <div class="hatch"></div>
+  </div>
+</div>
+
 <footer class="status" aria-live="polite">
-  <div class="live">Session locale</div>
+  <div class="live file" id="stFile">Sans titre</div>
   <div class="mode" id="stMode">&gt; Mode sélection_</div>
   <div class="info" id="stInfo">—</div>
 </footer>
@@ -833,6 +886,193 @@ document.addEventListener('paste',e=>{
 });
 /* la taille de la zone change : on laisse l'image où elle est, les contrôles se mettent à jour */
 ['W','H'].forEach(id=>$(id).addEventListener('change',()=>renderRef()));
+</script>
+<script>
+/* ---------- fichiers projet (.traceur) ---------- */
+const FILEKEY='traceur-fichier-v1';
+let fileHandle=null, fileName=null, savedSig=null;
+const canPick=()=>typeof window.showSaveFilePicker==='function';
+function docSig(){
+  const r=window.REF; return JSON.stringify([D, r?{...r,data:r.data?r.data.length:0}:null]);
+}
+const isDirty=()=>docSig()!==savedSig;
+const baseName=()=>fileName?fileName.replace(/\.(traceur|json)$/i,''):'sans-titre';
+const cleanName=s=>s.replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim()||'sans-titre';
+
+function project(){
+  return {format:'traceur',version:1,app:'Traceur de formes',savedAt:new Date().toISOString(),
+    zone:{W:D.W,H:D.H,step:D.step,snap:D.snap},shapes:D.shapes,reference:window.REF||null};
+}
+function applyProject(p){
+  if(!p||p.format!=='traceur'||!Array.isArray(p.shapes)||!p.zone) throw new Error('Ce fichier n\'est pas un projet Traceur.');
+  const z=p.zone;
+  D={W:+z.W>0?+z.W:120,H:+z.H>0?+z.H:120,step:+z.step>0?+z.step:5,snap:z.snap!==false,shapes:p.shapes};
+  uid=1; D.shapes.forEach(s=>{const n=+String(s.id).slice(1); if(n>=uid) uid=n+1;});
+  sel=D.shapes.find(s=>s.type==='path')?.id||D.shapes[0]?.id||null; psel=-1; addMode=false;
+  if(refUrl) URL.revokeObjectURL(refUrl); refUrl=null; window.REF=null;
+  if(p.reference&&p.reference.data){ window.REF=p.reference; refUrl=dataToBlobUrl(p.reference.data); }
+  $('refMove').checked=false;
+  hist=[snap()]; $('undo').disabled=true;
+  changed(); saveRef(); renderAll(); renderRef();
+}
+
+/* écriture : sélecteur de fichier natif (Chrome, Edge) sinon téléchargement */
+async function writeWithPicker(text,{name,desc,mime,ext,handle}){
+  const h=handle||await window.showSaveFilePicker({suggestedName:name,types:[{description:desc,accept:{[mime]:[ext]}}]});
+  const w=await h.createWritable(); await w.write(new Blob([text],{type:mime})); await w.close();
+  return h;
+}
+function download(text,name,mime){
+  const url=URL.createObjectURL(new Blob([text],{type:mime}));
+  const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+let saveResolve=null;
+function askName(def,ext,hint){
+  $('saveName').value=def; $('saveExt').textContent=ext; $('svErr').textContent='';
+  $('svHint').textContent=hint; $('saveSheet').hidden=false; $('saveName').focus(); $('saveName').select();
+  return new Promise(res=>{saveResolve=res;});
+}
+$('saveForm').addEventListener('submit',e=>{
+  e.preventDefault(); const v=cleanName($('saveName').value);
+  $('saveSheet').hidden=true; const r=saveResolve; saveResolve=null; r&&r(v);
+});
+function closeSave(){ $('saveSheet').hidden=true; if(saveResolve){const r=saveResolve; saveResolve=null; r(null);} }
+$('saveSheet').querySelector('[data-close]').addEventListener('click',closeSave);
+$('saveSheet').addEventListener('click',e=>{if(e.target===$('saveSheet')) closeSave();});
+const DL_HINT='Ton navigateur ne permet pas de choisir le dossier : le fichier sera téléchargé dans ton dossier Téléchargements.';
+
+async function saveProject(as){
+  const text=JSON.stringify(project(),null,2);
+  const opts={name:baseName()+'.traceur',desc:'Projet Traceur',mime:'application/json',ext:'.traceur'};
+  if(canPick()){
+    try{
+      const h=await writeWithPicker(text,{...opts,handle:(!as&&fileHandle)?fileHandle:null});
+      fileHandle=h; fileName=h.name; savedSig=docSig(); showFile(); toast('Enregistré · '+h.name); return true;
+    }catch(e){
+      if(e.name==='AbortError') return false;
+      if(e.name!=='SecurityError'&&e.name!=='NotAllowedError'){ toast('Échec de l\'enregistrement : '+e.message); return false; }
+    }
+  }
+  let name=fileName;
+  if(as||!name){ const n=await askName(baseName(),'.traceur',DL_HINT); if(!n) return false; name=n+'.traceur'; }
+  download(text,name,'application/json'); fileHandle=null; fileName=name; savedSig=docSig(); showFile();
+  toast('Téléchargé · '+name); return true;
+}
+async function saveSvg(){
+  const text=fullSvg();
+  const opts={name:baseName()+'.svg',desc:'Image SVG',mime:'image/svg+xml',ext:'.svg'};
+  if(canPick()){
+    try{ const h=await writeWithPicker(text,opts); toast('SVG enregistré · '+h.name); return; }
+    catch(e){ if(e.name==='AbortError') return; if(e.name!=='SecurityError'&&e.name!=='NotAllowedError'){toast('Échec : '+e.message);return;} }
+  }
+  const n=await askName(baseName(),'.svg',DL_HINT); if(!n) return;
+  download(text,n+'.svg','image/svg+xml'); toast('Téléchargé · '+n+'.svg');
+}
+
+/* demander avant d'écraser un travail non enregistré */
+let askResolve=null;
+function ask(msg){
+  $('askMsg').textContent=msg; $('askSheet').hidden=false; $('askSave').focus();
+  return new Promise(res=>{askResolve=res;});
+}
+['askSave','askDiscard','askCancel'].forEach(id=>$(id).addEventListener('click',()=>{
+  $('askSheet').hidden=true; const r=askResolve; askResolve=null; r&&r(id.slice(3).toLowerCase());
+}));
+async function guard(action){
+  if(!isDirty()) return true;
+  const r=await ask(`Le dessin en cours (${fileName||'sans titre'}) a des modifications non enregistrées. Que faire avant ${action} ?`);
+  if(r==='cancel') return false;
+  if(r==='save') return await saveProject(false);
+  return true;
+}
+
+/* ouverture */
+async function openText(text,name,handle){
+  if(/\.svg$/i.test(name)||/^\s*(<\?xml[^>]*>\s*)?<svg/i.test(text)){
+    D.shapes=[]; sel=null; psel=-1;
+    $('imErr').textContent=''; $('imIn').value=text; $('imSize').checked=true; $('doImport').click();
+    if($('imErr').textContent){ toast('SVG illisible : '+$('imErr').textContent); $('imIn').value=''; renderAll(); return; }
+    fileHandle=null; fileName=name.replace(/\.svg$/i,'')+'.traceur'; savedSig=null; showFile();
+    toast('SVG ouvert · enregistre-le pour créer le projet');
+    return;
+  }
+  let p; try{ p=JSON.parse(text); }catch(e){ toast('Fichier illisible : ce n\'est pas un projet Traceur'); return; }
+  try{ applyProject(p); }catch(e){ toast(e.message); return; }
+  fileHandle=handle||null; fileName=name; savedSig=docSig(); showFile();
+  toast(`Ouvert · ${name} · ${D.shapes.length} forme${D.shapes.length>1?'s':''}`);
+}
+async function openProject(){
+  if(!await guard('d\'ouvrir un autre fichier')) return;
+  if(typeof window.showOpenFilePicker==='function'){
+    try{
+      const [h]=await window.showOpenFilePicker({types:[{description:'Projet Traceur ou SVG',accept:{'application/json':['.traceur','.json'],'image/svg+xml':['.svg']}}]});
+      const file=await h.getFile(); await openText(await file.text(),file.name,/\.(traceur|json)$/i.test(file.name)?h:null); return;
+    }catch(e){ if(e.name==='AbortError') return; if(e.name!=='SecurityError'&&e.name!=='NotAllowedError'){toast('Ouverture impossible : '+e.message);return;} }
+  }
+  $('openFile').click();
+}
+$('openFile').addEventListener('change',async e=>{ const fl=e.target.files[0]; e.target.value=''; if(fl) await openText(await fl.text(),fl.name,null); });
+
+async function newProject(){
+  if(!await guard('de commencer un nouveau dessin')) return;
+  D={W:D.W,H:D.H,step:D.step,snap:D.snap,shapes:[]}; uid=1; sel=null; psel=-1; addMode=false;
+  if(refUrl) URL.revokeObjectURL(refUrl); refUrl=null; window.REF=null; $('refMove').checked=false;
+  hist=[snap()]; $('undo').disabled=true; changed(); saveRef(); renderAll(); renderRef();
+  fileHandle=null; fileName=null; savedSig=docSig(); showFile(); toast('Nouveau dessin');
+}
+
+/* glisser un .traceur sur le plan l'ouvre (une image reste une référence) */
+document.querySelector('.stagewrap').addEventListener('drop',async e=>{
+  const fl=[...(e.dataTransfer?.files||[])].find(x=>/\.(traceur|json)$/i.test(x.name));
+  if(!fl) return;
+  e.preventDefault(); e.stopPropagation(); document.querySelector('.canvasbox').classList.remove('drop');
+  if(await guard('d\'ouvrir ce fichier')) await openText(await fl.text(),fl.name,null);
+},true);
+document.querySelector('.stagewrap').addEventListener('dragover',e=>{ if([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+
+/* menu Fichier */
+const menu=$('fileList');
+function setMenu(open){ menu.hidden=!open; $('fileBtn').setAttribute('aria-expanded',String(open)); if(open) menu.querySelector('button').focus(); }
+$('fileBtn').addEventListener('click',e=>{ e.stopPropagation(); setMenu(menu.hidden); });
+document.addEventListener('click',e=>{ if(!menu.hidden&&!e.target.closest('#fileMenu')) setMenu(false); });
+menu.addEventListener('click',e=>{ if(e.target.closest('button')) setMenu(false); });
+menu.addEventListener('keydown',e=>{
+  const items=[...menu.querySelectorAll('button')], i=items.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'){e.preventDefault(); items[(i+1)%items.length].focus();}
+  if(e.key==='ArrowUp'){e.preventDefault(); items[(i-1+items.length)%items.length].focus();}
+  if(e.key==='Escape'){setMenu(false); $('fileBtn').focus();}
+});
+$('mNew').onclick=newProject;
+$('mOpen').onclick=openProject;
+$('mSave').onclick=()=>saveProject(false);
+$('mSaveAs').onclick=()=>saveProject(true);
+$('mSvg').onclick=saveSvg;
+$('saveSvgBtn').onclick=saveSvg;
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ if(!$('saveSheet').hidden) closeSave(); if(!$('askSheet').hidden) $('askCancel').click(); }
+  if(!(e.ctrlKey||e.metaKey)) return;
+  const k=e.key.toLowerCase();
+  if(k==='s'){ e.preventDefault(); saveProject(e.shiftKey); }
+  else if(k==='o'){ e.preventDefault(); openProject(); }
+  else if(k==='n'&&e.altKey){ e.preventDefault(); newProject(); }
+});
+
+/* nom du fichier et état « modifié » dans la barre d'état, conservés entre deux visites */
+(function(){
+  let st=null; try{ st=JSON.parse(localStorage.getItem(FILEKEY)||'null'); }catch(e){}
+  fileName=st&&st.name||null;
+  savedSig=(st&&st.dirty)?null:docSig();
+  window.showFile=function(){
+    const d=isDirty();
+    $('stFile').classList.toggle('is-dirty',d);
+    $('stFile').innerHTML=`<b>${esc(fileName||'Sans titre')}</b>${d?'<span class="dirty">· modifié</span>':''}`;
+    document.title=(d?'● ':'')+(fileName?baseName()+' · ':'')+'Traceur de formes';
+    try{ localStorage.setItem(FILEKEY,JSON.stringify({name:fileName,dirty:d})); }catch(e){}
+  }
+  showFile(); setInterval(showFile,700);
+})();
 </script>
 <script>
 /* horloge + barre d'état */
